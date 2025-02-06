@@ -1,0 +1,42 @@
+pipeline {
+    agent {
+        docker {
+            image 'abdoelwaly/testjenimage'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
+    stages {
+        stage('checkout') {
+            steps {
+                git 'https://github.com/abdoelwaly/jenkins.git'
+            }
+        }
+        stage('ci') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'labpass', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                    sh """
+                    docker build . -f dockerfile -t abdoelwaly/learningimages
+                    echo \$PASSWORD | docker login -u \$USERNAME --password-stdin
+                    docker push abdoelwaly/learningimages
+                    """
+                }
+            }
+        }
+        stage('cd') {
+            steps {
+                sh """
+                if [ \$(docker ps -a -q -f name=theapp) ]; then
+                    docker rm -f theapp
+                fi
+                docker run -d -p 3000:3000 --name theapp abdoelwaly/learningimages
+                """
+            }
+        }
+    }
+    post {
+        echo 'the pipeline has finished'
+        cleanup {
+            cleanWs()
+        }
+    }
+}
